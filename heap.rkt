@@ -1,14 +1,51 @@
 #lang racket
 
-(define (new-tree v l r) (list v l r))
-(define tree-get-value car)
-(define tree-get-left cadr)
-(define tree-get-right caddr)
+(define (insert-tree t v path)
+  (match path
+    ['() (list v '() '())]
+    [(cons branch rest-path)  
+     (match t
+       [(list v0 l r)
+        (if (= 0 branch)
+            (match (insert-tree l v rest-path)
+              [(list lv ll lr) #:when (> v0 lv) 
+                               (list lv (list v0 ll lr) r)]
+              [nl (list v0 nl r)])
+            (match (insert-tree r v rest-path)
+              [(list rv rl rr) #:when (> v0 rv) 
+                               (list rv l (list v0 rl rr))]
+              [nr (list v0 l nr)]))])]))
+
+(define (remove-tree tree path)
+  (match tree
+    [(list v l r)
+     (match path
+       ['() (cons v '())]
+       [(cons branch rest-path)
+        (if (= 0 branch)
+            (let ((res (remove-tree l rest-path)))
+              (cons (car res) (list v (cdr res) r)))
+            (let ((res (remove-tree r rest-path)))
+              (cons (car res) (list v l (cdr res)))))])]))
+
+  (define (percolatee-down tree)
+    (match tree
+      [(list v (list lv ll lr) '())
+       #:when (< lv v) 
+       (list lv (list v ll lr) '())]
+      [(list v (list lv ll lr) (list rv rl rr)) 
+       #:when (and (< lv v) (<= lv rv))
+       (list lv (percolatee-down (list v ll lr)) (list rv rl rr))]
+      [(list v (list lv ll lr) (list rv rl rr)) 
+       #:when (and (< rv v) (< rv lv))
+       (list rv (list lv ll lr) (percolatee-down (list v rl rr)))]
+      [else tree]))
 
 (define empty-heap (list 0 '()))
 (define (new-heap size tree) (list size tree))
 (define heap-get-size car)
 (define heap-get-tree cadr)
+
 (define (int-to-bits n)
   (define (helper acc n)
     (if (= 0 n)
@@ -16,73 +53,21 @@
         (helper (cons (bitwise-and 1 n) acc)
                 (arithmetic-shift n -1))))
   (helper '() n))
+
 (define (heap-insert h v)
-  (define (insert-tree t path)
-    (if (empty? path)
-        (new-tree v '() '())
-        (let ((branch (car path))
-              (l (tree-get-left t))
-              (r (tree-get-right t))
-              (v0 (tree-get-value t)))
-          (if (= branch 0)
-              (let* ((new-l (insert-tree l (cdr path)))
-                     (new-l-v (tree-get-value new-l)))
-                (if (> v0 new-l-v)
-                    (new-tree new-l-v (new-tree v0 (tree-get-left new-l) (tree-get-right new-l)) r)
-                    (new-tree v0  new-l r)))
-              (let* ((new-r (insert-tree r (cdr path)))
-                     (new-r-v (tree-get-value new-r)))
-                (if (> v0 new-r-v)
-                    (new-tree new-r-v l (new-tree v0 (tree-get-left new-r) (tree-get-right new-r)))
-                    (new-tree v0  l new-r)))))))
   (let* ((size (heap-get-size h))
          (tree (heap-get-tree h))
          (path (cdr (int-to-bits (+ size 1)))))
-    (new-heap (+ size 1) (insert-tree tree path))))
-(define (tree-with-value tree v)
-  (new-tree v (tree-get-left tree) (tree-get-right tree)))
+    (new-heap (+ size 1) (insert-tree tree v path))))
+
 (define (heap-remove-min h)
-  (define (remove-tree tree path)
-    (let ((v0 (tree-get-value tree)))
-      (if (empty? path)
-          (cons v0 '())
-          (if (= 0 (car path))
-              (let ((res (remove-tree (tree-get-left tree) (cdr path))))
-                (cons (car res) (new-tree v0 (cdr res) (tree-get-right tree))))
-              (let ((res (remove-tree (tree-get-right tree) (cdr path))))
-                (cons (car res) (new-tree v0 (tree-get-left tree) (cdr res))))))))
-  (define (percolatee-down v0 l r)
-    (define (le? v t)
-      (or (empty? t)
-          (<= v (tree-get-value t))))
-    (let* ((not-empty? (lambda (x) (not (empty? x))))
-           (choice (cond [(and (le? v0 l) (le? v0 r)) 0]
-                         [(let ((lv (tree-get-value l)))
-                            (and (<= lv v0) (le? lv r)))
-                          1]
-                         [else 2])))
-      (cond
-        [(= choice 0) (new-tree v0 l r)]
-        [(= choice 1) (new-tree (tree-get-value l) 
-                                (percolatee-down v0 (tree-get-left l) (tree-get-right l))
-                                r)]
-        [(= choice 2) (new-tree (tree-get-value r)
-                                l
-                                (percolatee-down v0 (tree-get-left r) (tree-get-right r)))])))
   (let* ((size (heap-get-size h))
          (tree (heap-get-tree h))
-         (res-v (tree-get-value tree))
-         (path (cdr (int-to-bits size)))
-         (last-removed (remove-tree tree path))
-         (tree-with-no-last (cdr last-removed))
-         (last-value (car last-removed))
-         (res-tree (if (empty? tree-with-no-last)
-                       '()
-                       (percolatee-down last-value 
-                                        (tree-get-left tree-with-no-last) 
-                                        (tree-get-right tree-with-no-last))))
-         (res-h (new-heap (- size 1) res-tree)))
-    (cons res-v res-h)))
+         (path (cdr (int-to-bits size))))
+    (match (remove-tree tree path)
+      [(cons v '()) (cons v empty-heap)]
+      [(cons v-last (list v l r))
+       (cons v (new-heap (- size 1) (percolatee-down (list v-last l r))))])))
 
 (define (build-heap-naive l)
   (define (iter acc rem)
@@ -101,15 +86,4 @@
           (cons v (helper new-h)))))
   (helper (build-heap-naive l)))
 
-(define (sorted? l)
-  (if (or (empty? l) (empty? (cdr l)))
-      #t
-      (and (<= (car l) (cadr l))
-           (sorted? (cdr l)))))
-
-(define (random-list n)
-  (if (= n 0)
-      '()
-      (cons (random) (random-list (- n 1)))))
-
-(time (sorted?(heap-sort (random-list 20000))))
+(provide heap-sort build-heap-naive heap-remove-min heap-insert empty-heap)
