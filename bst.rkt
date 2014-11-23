@@ -7,8 +7,8 @@
   (match tree
     ['() (void)]
     [(list v0 l r) (match (cmp v v0)
-                     [x #:when (< x 0) (find l v)]
-                     [x #:when (> x 0) (find r v)]
+                     [x #:when (< x 0) (find cmp l v)]
+                     [x #:when (> x 0) (find cmp r v)]
                      [else v0])]))
 (define (bst-find bst v)
   (match bst
@@ -87,3 +87,21 @@
         (match (bst-remove-max bst)
           [(cons v-max new-bst) (helper new-bst (cons v-max acc))])))
   (helper (bst-build l cmp) '()))
+
+(define (tree->list tree)
+  (match tree
+    ['() '()]
+    [(list v l r) (append (tree->list l) (cons v (tree->list r)))]))
+(define (bst->list bst)
+  (match bst
+    [(cons _ tree) (tree->list tree)]))
+
+(provide bst-insert 
+         bst-find 
+         bst-remove 
+         bst-sort 
+         bst-build 
+         bst-remove-min
+         bst-remove-max
+         bst-empty 
+         bst-empty?)

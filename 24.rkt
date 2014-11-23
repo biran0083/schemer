@@ -1,4 +1,5 @@
 #lang racket
+(require "bst.rkt")
 (define (all-split l)
   (match l
     [(list x) '()]
@@ -11,25 +12,13 @@
     ['() '()]
     [(cons fst rst) #:when (eq? fst v) rst]
     [(cons fst rst) (cons fst (remove-first rst v))]))
-(define (member? e l eq?)
-  (match l
-    ['() #f]
-    [(cons fst rst) #:when (eq? fst e) #t]
-    [(cons fst rst) (member? e rst eq?)]))
-(define (unique l eq?)
-  (if (empty? l)
-      '()
-      (let ([t (unique (cdr l) eq?)])
-        (if (member? (car l) t eq?)
-            t
-            (cons (car l) t)))))
 (define (permutation l)
   (match l
     ['() '(())]
     [else (flat-map (lambda (e) 
                       (map (lambda (x) (cons e x)) 
                            (permutation (remove-first l e))))
-                    (unique l eq?))]))
+                    (unique l -))]))
 (define (cartesian-product l1 l2)
   (flat-map (lambda (v1)
               (map (lambda (v2) (cons v1 v2))
@@ -46,11 +35,6 @@
                                   (cartesian-product l-ast-list r-ast-list))))
                     (flat-map all-split (permutation values)))]))
 
-(define ns (make-base-namespace))
-(define (eval-with-ns l) 
-  (with-handlers ([exn:fail:contract:divide-by-zero?
-                   (lambda (exn) +inf.0)])
-    (eval l ns)))
 (define (is-answer? exp)
   (< (abs (- (eval-with-ns exp) 24)) 1e-6))
 
@@ -89,6 +73,28 @@
     [else ast]))
 (define (ast-eq? t1 t2) (zero? (ast-cmp t1 t2)))
 
+(define (unique l cmp)
+  (define (iter acc rem seen)
+    (match rem
+      ['() acc]
+      [(cons fst rst) 
+       (if (void? (bst-find seen fst))
+           (iter (cons fst acc) rst (bst-insert seen fst))
+           (iter acc rst seen))]))
+  (iter '() l (bst-empty cmp)))
+
+
+(define ns (make-base-namespace))
+
+;(namespace-set-variable-value! '/ quotient #t ns)
+
+(define (eval-with-ns l) 
+  (with-handlers ([exn:fail:contract:divide-by-zero?
+                   (lambda (exn) +inf.0)])
+    (eval l ns)))
 (define (solve-24 l)
-  (filter is-answer? (all-ast '(+ - * /) l)))
-(solve-24 '(5 5 5 1))
+  (unique (map normalize-ast (filter is-answer? (all-ast '(+ - * /) l))) ast-cmp))
+;(solve-24 '(5 5 5 1))
+;(time (begin (unique  ast-cmp) '()))
+
+;(time (solve-24 '(9 8 3 1)))
